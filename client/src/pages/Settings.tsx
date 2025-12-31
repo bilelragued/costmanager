@@ -24,7 +24,12 @@ export default function Settings() {
     mutationFn: settingsApi.seedDemo,
     onSuccess: () => {
       queryClient.invalidateQueries();
-      alert('Demo data loaded successfully!');
+      alert('Demo data loaded successfully! The page will reload to show the new data.');
+      window.location.reload();
+    },
+    onError: (error: any) => {
+      alert(`Failed to load demo data: ${error.message || 'Unknown error'}`);
+      console.error('Seed error:', error);
     },
   });
 
@@ -211,17 +216,26 @@ export default function Settings() {
       <div className="card p-6 mt-8 bg-gray-50">
         <h2 className="text-lg font-semibold mb-2">Demo Data</h2>
         <p className="text-sm text-gray-600 mb-4">
-          Load sample data including plant, labour, materials, and a demo project to explore the system.
+          Load sample data including 20 tenders and 10 active projects with full WBS structures, progress claims, and actuals.
           This will clear any existing data.
         </p>
         <button
-          onClick={() => seedMutation.mutate()}
+          onClick={() => {
+            if (confirm('This will clear all existing data and load demo data. Are you sure?')) {
+              seedMutation.mutate();
+            }
+          }}
           disabled={seedMutation.isPending}
-          className="btn btn-secondary flex items-center gap-2"
+          className="btn btn-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Play className="w-4 h-4" />
-          {seedMutation.isPending ? 'Loading...' : 'Load Demo Data'}
+          <Play className={`w-4 h-4 ${seedMutation.isPending ? 'animate-spin' : ''}`} />
+          {seedMutation.isPending ? 'Loading demo data... (this may take 10-15 seconds)' : 'Load Demo Data'}
         </button>
+        {seedMutation.isError && (
+          <p className="text-sm text-red-600 mt-2">
+            Error: {(seedMutation.error as any)?.message || 'Failed to load demo data'}
+          </p>
+        )}
       </div>
     </div>
   );
