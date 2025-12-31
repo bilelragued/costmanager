@@ -44,6 +44,14 @@ export function seedDatabase() {
     DELETE FROM wbs_labour_assignments;
     DELETE FROM wbs_plant_assignments;
     DELETE FROM wbs_items;
+    DELETE FROM programme_wbs_mappings;
+    DELETE FROM resource_programme_mappings;
+    DELETE FROM allocation_rule_targets;
+    DELETE FROM allocation_rules;
+    DELETE FROM actual_cost_allocations;
+    DELETE FROM mapping_templates;
+    DELETE FROM mapping_validation_log;
+    DELETE FROM programme_tasks;
     DELETE FROM projects WHERE id NOT IN (SELECT DISTINCT project_id FROM cashflow_rules WHERE project_id IS NOT NULL);
     DELETE FROM crew_template_members;
     DELETE FROM crew_templates;
@@ -246,7 +254,7 @@ export function seedDatabase() {
         wbsId, project.id, null, wbs.code, wbs.name, wbs.level, idx, wbs.quantity, wbs.unit, wbs.rate, taskStart, taskEnd, taskDuration
       );
 
-      createdWbs.push({ ...wbs, id: wbsId, start_date: taskStart, end_date: taskEnd });
+      createdWbs.push({ ...wbs, id: wbsId, start_date: taskStart, end_date: taskEnd, duration: taskDuration });
 
       // Add resource assignments to WBS items
       if (idx === 0) { // Mobilisation
@@ -303,6 +311,59 @@ export function seedDatabase() {
                     VALUES (?, ?, ?, ?, ?)`).run(uuidv4(), wbsId, subcontractorTypes[3].id, 'Landscaping', 45000);
       }
     });
+
+    // Create Programme Tasks - a scheduling hierarchy that maps to WBS
+    console.log(`    Creating programme tasks for ${project.code}...`);
+
+    const programmeTasks = [
+      { code: 'PT-1.0', name: 'Project Setup & Mobilisation', color: '#3B82F6' },
+      { code: 'PT-2.0', name: 'Bulk Earthworks', color: '#EF4444' },
+      { code: 'PT-3.0', name: 'Stormwater Drainage Installation', color: '#10B981' },
+      { code: 'PT-4.0', name: 'Pavement Construction', color: '#F59E0B' },
+      { code: 'PT-5.0', name: 'Bridge & Structural Works', color: '#8B5CF6' },
+      { code: 'PT-6.0', name: 'Site Finishing & Handover', color: '#EC4899' },
+    ];
+
+    const createdTasks: any[] = [];
+    programmeTasks.forEach((task, idx) => {
+      const taskId = uuidv4();
+      const correspondingWbs = createdWbs[idx];
+      const taskDuration = correspondingWbs.duration;
+      const taskStart = correspondingWbs.start_date;
+      const taskEnd = correspondingWbs.end_date;
+
+      // Calculate progress based on project completion and task timing
+      let percentComplete = 0;
+      const now = new Date().getTime();
+      const taskStartTime = new Date(taskStart).getTime();
+      const taskEndTime = new Date(taskEnd).getTime();
+
+      if (now > taskEndTime) {
+        percentComplete = 100;
+      } else if (now > taskStartTime) {
+        percentComplete = Math.min(100, ((now - taskStartTime) / (taskEndTime - taskStartTime)) * 100 * project.completion);
+      }
+
+      db.prepare(`INSERT INTO programme_tasks (id, project_id, code, name, description, parent_id, level, sort_order, start_date, end_date, duration_days, predecessor_id, predecessor_lag_days, percent_complete, color)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        taskId, project.id, task.code, task.name, `${task.name} activities`,
+        null, 1, idx, taskStart, taskEnd, taskDuration,
+        idx > 0 ? createdTasks[idx - 1].id : null, idx > 0 ? 0 : null,
+        percentComplete, task.color
+      );
+
+      createdTasks.push({ id: taskId, code: task.code, name: task.name, wbsIdx: idx });
+
+      // Create Programme-WBS Mapping (linking this task to the corresponding WBS item)
+      db.prepare(`INSERT INTO programme_wbs_mappings (id, project_id, programme_task_id, wbs_item_id, allocation_type, allocation_percent, notes)
+                  VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+        uuidv4(), project.id, taskId, correspondingWbs.id,
+        'percent', 100,
+        `Auto-mapped: ${task.code} → ${correspondingWbs.code}`
+      );
+    });
+
+    console.log(`    Created ${createdTasks.length} programme tasks with mappings`);
 
     // Add actual data based on project completion percentage
     const daysElapsed = Math.floor((new Date().getTime() - new Date(project.start_date).getTime()) / (1000 * 60 * 60 * 24));
@@ -404,6 +465,7 @@ export function seedDatabase() {
   console.log(`- 10 active projects created with varying completion stages`);
   console.log(`- Resource libraries populated (plant, labour, materials, subcontractors)`);
   console.log(`- WBS structures, resource assignments, daily logs, and progress claims added`);
+  console.log(`- Programme tasks with WBS mappings created for all active projects`);
 }
 
 // Run seed if this file is executed directly
