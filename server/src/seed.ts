@@ -410,3 +410,5 @@ export function seedDatabase() {
 if (require.main === module) {
   seedDatabase();
 }
+
+export { seedDatabase };
