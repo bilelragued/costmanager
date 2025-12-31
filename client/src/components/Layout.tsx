@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Outlet, NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -17,8 +17,6 @@ const navItems = [
 ];
 
 export default function Layout() {
-  const location = useLocation();
-
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}

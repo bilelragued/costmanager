@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
-import { wbsApi, resourcesApi, projectsApi } from '../services/api';
+import { wbsApi, projectsApi } from '../services/api';
 import { formatCurrency, formatNumber } from '../utils/format';
 import {
   ArrowLeft,
@@ -10,7 +10,6 @@ import {
   ChevronDown,
   Trash2,
   Edit2,
-  Save,
   X
 } from 'lucide-react';
 
@@ -18,7 +17,6 @@ export default function WBSEditor() {
   const { id: projectId } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const [editingItem, setEditingItem] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
 
@@ -32,34 +30,11 @@ export default function WBSEditor() {
     queryFn: () => wbsApi.listByProject(projectId!),
   });
 
-  const { data: plantTypes = [] } = useQuery({
-    queryKey: ['resources', 'plant'],
-    queryFn: resourcesApi.plant.list,
-  });
-
-  const { data: labourTypes = [] } = useQuery({
-    queryKey: ['resources', 'labour'],
-    queryFn: resourcesApi.labour.list,
-  });
-
-  const { data: materialTypes = [] } = useQuery({
-    queryKey: ['resources', 'materials'],
-    queryFn: resourcesApi.materials.list,
-  });
-
   const createMutation = useMutation({
     mutationFn: wbsApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wbs', projectId] });
       setShowAddForm(false);
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => wbsApi.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wbs', projectId] });
-      setEditingItem(null);
     },
   });
 

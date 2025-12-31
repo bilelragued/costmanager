@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { claimsApi, projectsApi } from '../services/api';
 import { formatCurrency, formatDate, getStatusColor } from '../utils/format';
-import { ArrowLeft, Plus, FileText, CheckCircle, Clock, DollarSign } from 'lucide-react';
+import { ArrowLeft, Plus, FileText } from 'lucide-react';
 
 export default function Claims() {
   const { id: projectId } = useParams<{ id: string }>();

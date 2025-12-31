@@ -1,10 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { projectsApi, dashboardApi } from '../services/api';
 import { formatCurrency, formatPercent, formatDate, getStatusColor, getVarianceColor } from '../utils/format';
 import {
   ArrowLeft,
-  Edit,
   Copy,
   PlayCircle,
   Calendar,
@@ -19,7 +18,6 @@ import {
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const { data: project, isLoading: projectLoading } = useQuery({
