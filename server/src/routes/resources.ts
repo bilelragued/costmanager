@@ -310,7 +310,7 @@ router.post('/crews', (req, res) => {
       WHERE ctm.crew_template_id = ?
     `).all(id);
 
-    res.status(201).json({ ...crew, members: crewMembers });
+    res.status(201).json({ ...(crew as object), members: crewMembers });
   } catch (error: any) {
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
       res.status(400).json({ error: 'Crew name already exists' });

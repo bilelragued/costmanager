@@ -156,7 +156,7 @@ router.post('/', (req, res) => {
       WHERE cli.claim_id = ?
     `).all(id);
 
-    res.status(201).json({ ...claim, line_items: lineItems });
+    res.status(201).json({ ...(claim as object), line_items: lineItems });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to create claim' });
