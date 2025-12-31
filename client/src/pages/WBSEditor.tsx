@@ -17,6 +17,7 @@ export default function WBSEditor() {
   const { id: projectId } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [editingItem, setEditingItem] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
 

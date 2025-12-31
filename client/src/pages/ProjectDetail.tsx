@@ -25,7 +25,7 @@ export default function ProjectDetail() {
     queryFn: () => projectsApi.get(id!),
   });
 
-  const { data: dashboard, isLoading: dashboardLoading } = useQuery({
+  const { data: dashboard } = useQuery({
     queryKey: ['dashboard', 'project', id],
     queryFn: () => dashboardApi.project(id!),
     enabled: !!project && project.status !== 'tender',

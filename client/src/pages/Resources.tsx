@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { resourcesApi } from '../services/api';
 import { formatCurrency } from '../utils/format';
-import { Plus, Truck, Users, Package, Hammer, Edit2, Trash2, X } from 'lucide-react';
+import { Plus, Truck, Users, Package, Hammer, Trash2, X } from 'lucide-react';
 
 type ResourceTab = 'plant' | 'labour' | 'materials' | 'subcontractors';
 
