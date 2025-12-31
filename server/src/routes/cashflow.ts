@@ -39,7 +39,7 @@ function getLastDayOfMonth(year: number, month: number): Date {
   return new Date(year, month + 1, 0);
 }
 
-// Project cashflow forecast
+// Project cashflow forecast - Uses Programme Tasks + WBS Mappings
 router.get('/project/:projectId', (req, res) => {
   try {
     const projectId = req.params.projectId;
@@ -52,8 +52,26 @@ router.get('/project/:projectId', (req, res) => {
 
     const settings = db.prepare('SELECT * FROM company_settings WHERE id = ?').get('default') as any;
 
+    // Check if project uses programme_tasks (new mapping system) or WBS items (legacy)
+    const programmeTasks = db.prepare(`
+      SELECT * FROM programme_tasks WHERE project_id = ? AND start_date IS NOT NULL
+    `).all(projectId) as any[];
+
+    const useMappings = programmeTasks.length > 0;
+
     // Initialize months
-    const startDate = project.start_date ? new Date(project.start_date) : new Date();
+    let startDate = project.start_date ? new Date(project.start_date) : new Date();
+
+    // If using mappings, find earliest programme task start
+    if (useMappings && programmeTasks.length > 0) {
+      const earliestStart = programmeTasks.reduce((earliest, task) => {
+        if (!task.start_date) return earliest;
+        const taskStart = new Date(task.start_date);
+        return !earliest || taskStart < earliest ? taskStart : earliest;
+      }, null as Date | null);
+      if (earliestStart) startDate = earliestStart;
+    }
+
     const cashflow: Map<string, CashflowMonth> = new Map();
 
     for (let i = 0; i < months; i++) {
@@ -68,71 +86,135 @@ router.get('/project/:projectId', (req, res) => {
       });
     }
 
-    // Get WBS items with programme dates and costs
-    const wbsItems = db.prepare(`
-      SELECT
-        w.*,
-        (SELECT COALESCE(SUM(budgeted_hours * hourly_rate), 0) FROM wbs_plant_assignments WHERE wbs_item_id = w.id) as plant_cost,
-        (SELECT COALESCE(SUM(budgeted_hours * hourly_rate * quantity), 0) FROM wbs_labour_assignments WHERE wbs_item_id = w.id) as labour_cost,
-        (SELECT COALESCE(SUM(budgeted_quantity * unit_rate), 0) FROM wbs_material_assignments WHERE wbs_item_id = w.id) as material_cost,
-        (SELECT COALESCE(SUM(budgeted_value), 0) FROM wbs_subcontractor_assignments WHERE wbs_item_id = w.id) as subcontractor_cost
-      FROM wbs_items w
-      WHERE w.project_id = ? AND w.start_date IS NOT NULL
-      ORDER BY w.start_date
-    `).all(projectId) as any[];
+    if (useMappings) {
+      // NEW: Use programme tasks with WBS mappings for cost distribution
+      const mappingsWithCosts = db.prepare(`
+        SELECT
+          pt.id as task_id,
+          pt.start_date,
+          pt.end_date,
+          pt.duration_days,
+          pwm.allocation_percent,
+          pwm.allocation_type,
+          w.id as wbs_id,
+          w.quantity,
+          w.schedule_of_rates_rate,
+          w.is_payment_milestone,
+          (SELECT COALESCE(SUM(budgeted_hours * hourly_rate), 0) FROM wbs_plant_assignments WHERE wbs_item_id = w.id) as plant_cost,
+          (SELECT COALESCE(SUM(budgeted_hours * hourly_rate * quantity), 0) FROM wbs_labour_assignments WHERE wbs_item_id = w.id) as labour_cost,
+          (SELECT COALESCE(SUM(budgeted_quantity * unit_rate), 0) FROM wbs_material_assignments WHERE wbs_item_id = w.id) as material_cost,
+          (SELECT COALESCE(SUM(budgeted_value), 0) FROM wbs_subcontractor_assignments WHERE wbs_item_id = w.id) as subcontractor_cost
+        FROM programme_tasks pt
+        JOIN programme_wbs_mappings pwm ON pt.id = pwm.programme_task_id
+        JOIN wbs_items w ON pwm.wbs_item_id = w.id
+        WHERE pt.project_id = ? AND pt.start_date IS NOT NULL
+        ORDER BY pt.start_date
+      `).all(projectId) as any[];
 
-    // Distribute costs across months based on programme
-    for (const wbs of wbsItems) {
-      if (!wbs.start_date || !wbs.end_date) continue;
+      // Distribute costs based on programme task dates + allocation percentages
+      for (const mapping of mappingsWithCosts) {
+        if (!mapping.start_date || !mapping.end_date) continue;
 
-      const start = new Date(wbs.start_date);
-      const end = new Date(wbs.end_date);
-      const durationDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+        const start = new Date(mapping.start_date);
+        const end = new Date(mapping.end_date);
+        const durationDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
 
-      // Daily cost rates
-      const dailyLabour = wbs.labour_cost / durationDays;
-      const dailyPlant = wbs.plant_cost / durationDays;
-      const dailyMaterial = wbs.material_cost / durationDays;
-      const dailySubcon = wbs.subcontractor_cost / durationDays;
-      const dailyRevenue = wbs.is_payment_milestone ? (wbs.quantity * wbs.schedule_of_rates_rate) / durationDays : 0;
+        // Apply allocation percentage to costs
+        const allocationFactor = (mapping.allocation_percent || 100) / 100;
 
-      // Distribute across each day/month
-      let currentDate = new Date(start);
-      while (currentDate <= end) {
-        const monthKey = getMonthKey(currentDate);
-        const monthData = cashflow.get(monthKey);
+        // Daily cost rates (allocated portion)
+        const dailyLabour = (mapping.labour_cost * allocationFactor) / durationDays;
+        const dailyPlant = (mapping.plant_cost * allocationFactor) / durationDays;
+        const dailyMaterial = (mapping.material_cost * allocationFactor) / durationDays;
+        const dailySubcon = (mapping.subcontractor_cost * allocationFactor) / durationDays;
+        const dailyRevenue = mapping.is_payment_milestone
+          ? (mapping.quantity * mapping.schedule_of_rates_rate * allocationFactor) / durationDays
+          : 0;
 
-        if (monthData) {
-          // Costs are incurred in the work month
-          // But paid according to payment terms
+        let currentDate = new Date(start);
+        while (currentDate <= end) {
+          const monthKey = getMonthKey(currentDate);
+          const monthData = cashflow.get(monthKey);
 
-          // Labour: paid weekly (assume same month for simplicity)
-          monthData.outflows.labour += dailyLabour;
+          if (monthData) {
+            monthData.outflows.labour += dailyLabour;
+            monthData.outflows.plant += dailyPlant * 0.5;
 
-          // Plant owned: same month
-          monthData.outflows.plant += dailyPlant * 0.5; // Assume 50% owned
+            const paymentMonth = getMonthKey(addMonths(currentDate, 1));
+            const paymentMonthData = cashflow.get(paymentMonth);
+            if (paymentMonthData) {
+              paymentMonthData.outflows.plant += dailyPlant * 0.5;
+              paymentMonthData.outflows.materials += dailyMaterial;
+              paymentMonthData.outflows.subcontractors += dailySubcon;
+            }
 
-          // Plant hired, materials, subcon: paid month following
-          const paymentMonth = getMonthKey(addMonths(currentDate, 1));
-          const paymentMonthData = cashflow.get(paymentMonth);
-          if (paymentMonthData) {
-            paymentMonthData.outflows.plant += dailyPlant * 0.5; // 50% hired
-            paymentMonthData.outflows.materials += dailyMaterial;
-            paymentMonthData.outflows.subcontractors += dailySubcon;
-          }
-
-          // Revenue: claimed at end of work month, paid ~45 days later
-          // Simplify: revenue comes in the month after work
-          if (dailyRevenue > 0) {
-            const revenueMonth = getMonthKey(addMonths(currentDate, 1));
-            const revenueMonthData = cashflow.get(revenueMonth);
-            if (revenueMonthData) {
-              revenueMonthData.inflows.claims += dailyRevenue * (1 - project.retention_percent / 100);
+            if (dailyRevenue > 0) {
+              const revenueMonth = getMonthKey(addMonths(currentDate, 1));
+              const revenueMonthData = cashflow.get(revenueMonth);
+              if (revenueMonthData) {
+                revenueMonthData.inflows.claims += dailyRevenue * (1 - project.retention_percent / 100);
+              }
             }
           }
-        }
 
-        currentDate.setDate(currentDate.getDate() + 1);
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+      }
+    } else {
+      // LEGACY: Use WBS items directly (fallback for projects without mappings)
+      const wbsItems = db.prepare(`
+        SELECT
+          w.*,
+          (SELECT COALESCE(SUM(budgeted_hours * hourly_rate), 0) FROM wbs_plant_assignments WHERE wbs_item_id = w.id) as plant_cost,
+          (SELECT COALESCE(SUM(budgeted_hours * hourly_rate * quantity), 0) FROM wbs_labour_assignments WHERE wbs_item_id = w.id) as labour_cost,
+          (SELECT COALESCE(SUM(budgeted_quantity * unit_rate), 0) FROM wbs_material_assignments WHERE wbs_item_id = w.id) as material_cost,
+          (SELECT COALESCE(SUM(budgeted_value), 0) FROM wbs_subcontractor_assignments WHERE wbs_item_id = w.id) as subcontractor_cost
+        FROM wbs_items w
+        WHERE w.project_id = ? AND w.start_date IS NOT NULL
+        ORDER BY w.start_date
+      `).all(projectId) as any[];
+
+      for (const wbs of wbsItems) {
+        if (!wbs.start_date || !wbs.end_date) continue;
+
+        const start = new Date(wbs.start_date);
+        const end = new Date(wbs.end_date);
+        const durationDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+
+        const dailyLabour = wbs.labour_cost / durationDays;
+        const dailyPlant = wbs.plant_cost / durationDays;
+        const dailyMaterial = wbs.material_cost / durationDays;
+        const dailySubcon = wbs.subcontractor_cost / durationDays;
+        const dailyRevenue = wbs.is_payment_milestone ? (wbs.quantity * wbs.schedule_of_rates_rate) / durationDays : 0;
+
+        let currentDate = new Date(start);
+        while (currentDate <= end) {
+          const monthKey = getMonthKey(currentDate);
+          const monthData = cashflow.get(monthKey);
+
+          if (monthData) {
+            monthData.outflows.labour += dailyLabour;
+            monthData.outflows.plant += dailyPlant * 0.5;
+
+            const paymentMonth = getMonthKey(addMonths(currentDate, 1));
+            const paymentMonthData = cashflow.get(paymentMonth);
+            if (paymentMonthData) {
+              paymentMonthData.outflows.plant += dailyPlant * 0.5;
+              paymentMonthData.outflows.materials += dailyMaterial;
+              paymentMonthData.outflows.subcontractors += dailySubcon;
+            }
+
+            if (dailyRevenue > 0) {
+              const revenueMonth = getMonthKey(addMonths(currentDate, 1));
+              const revenueMonthData = cashflow.get(revenueMonth);
+              if (revenueMonthData) {
+                revenueMonthData.inflows.claims += dailyRevenue * (1 - project.retention_percent / 100);
+              }
+            }
+          }
+
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
       }
     }
 
@@ -156,6 +238,7 @@ router.get('/project/:projectId', (req, res) => {
     res.json({
       project_id: projectId,
       project_name: project.name,
+      uses_mappings: useMappings,
       forecast: result,
       summary: {
         total_inflows: result.reduce((sum, m) => sum + m.inflows.total, 0),

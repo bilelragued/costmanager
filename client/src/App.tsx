@@ -5,6 +5,7 @@ import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import WBSEditor from './pages/WBSEditor';
 import Programme from './pages/Programme';
+import Mappings from './pages/Mappings';
 import Costs from './pages/Costs';
 import Claims from './pages/Claims';
 import Cashflow from './pages/Cashflow';
@@ -22,6 +23,7 @@ function App() {
           <Route path="projects/:id" element={<ProjectDetail />} />
           <Route path="projects/:id/wbs" element={<WBSEditor />} />
           <Route path="projects/:id/programme" element={<Programme />} />
+          <Route path="projects/:id/mappings" element={<Mappings />} />
           <Route path="projects/:id/costs" element={<Costs />} />
           <Route path="projects/:id/claims" element={<Claims />} />
           <Route path="projects/:id/cashflow" element={<Cashflow />} />

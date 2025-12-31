@@ -136,3 +136,79 @@ export const settingsApi = {
   update: (data: any) => request<any>('/settings', { method: 'PUT', body: JSON.stringify(data) }),
   seedDemo: () => request<any>('/settings/seed-demo', { method: 'POST' }),
 };
+
+// Mappings
+export const mappingsApi = {
+  // Programme Tasks
+  programmeTasks: {
+    list: (projectId: string) => request<any[]>(`/mappings/programme-tasks/project/${projectId}`),
+    get: (id: string) => request<any>(`/mappings/programme-tasks/${id}`),
+    create: (data: any) => request<any>('/mappings/programme-tasks', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: any) => request<any>(`/mappings/programme-tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request<any>(`/mappings/programme-tasks/${id}`, { method: 'DELETE' }),
+    recalculate: (projectId: string, startDate: string) =>
+      request<any[]>(`/mappings/programme-tasks/project/${projectId}/recalculate`, { method: 'POST', body: JSON.stringify({ start_date: startDate }) }),
+  },
+
+  // Programme-WBS Mappings
+  programmeWbs: {
+    listByProject: (projectId: string) => request<any[]>(`/mappings/programme-wbs/project/${projectId}`),
+    listByTask: (taskId: string) => request<any[]>(`/mappings/programme-wbs/task/${taskId}`),
+    listByWbs: (wbsId: string) => request<any[]>(`/mappings/programme-wbs/wbs/${wbsId}`),
+    create: (data: any) => request<any>('/mappings/programme-wbs', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: any) => request<any>(`/mappings/programme-wbs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request<any>(`/mappings/programme-wbs/${id}`, { method: 'DELETE' }),
+    bulkCreate: (projectId: string, mappings: any[]) =>
+      request<any[]>('/mappings/programme-wbs/bulk', { method: 'POST', body: JSON.stringify({ project_id: projectId, mappings }) }),
+  },
+
+  // Resource-Programme Mappings
+  resourceProgramme: {
+    listByProject: (projectId: string) => request<any[]>(`/mappings/resource-programme/project/${projectId}`),
+    listByTask: (taskId: string) => request<any[]>(`/mappings/resource-programme/task/${taskId}`),
+    create: (data: any) => request<any>('/mappings/resource-programme', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: any) => request<any>(`/mappings/resource-programme/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request<any>(`/mappings/resource-programme/${id}`, { method: 'DELETE' }),
+  },
+
+  // Allocation Rules
+  allocationRules: {
+    list: (projectId: string) => request<any[]>(`/mappings/allocation-rules/project/${projectId}`),
+    get: (id: string) => request<any>(`/mappings/allocation-rules/${id}`),
+    create: (data: any) => request<any>('/mappings/allocation-rules', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: any) => request<any>(`/mappings/allocation-rules/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request<any>(`/mappings/allocation-rules/${id}`, { method: 'DELETE' }),
+    addTarget: (ruleId: string, data: any) =>
+      request<any>(`/mappings/allocation-rules/${ruleId}/targets`, { method: 'POST', body: JSON.stringify(data) }),
+    updateTarget: (id: string, data: any) =>
+      request<any>(`/mappings/allocation-rule-targets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deleteTarget: (id: string) => request<any>(`/mappings/allocation-rule-targets/${id}`, { method: 'DELETE' }),
+  },
+
+  // Actual Cost Allocations
+  actualAllocations: {
+    listByProject: (projectId: string) => request<any[]>(`/mappings/actual-allocations/project/${projectId}`),
+    listBySource: (sourceType: string, sourceId: string) =>
+      request<any[]>(`/mappings/actual-allocations/source/${sourceType}/${sourceId}`),
+    create: (data: any) => request<any>('/mappings/actual-allocations', { method: 'POST', body: JSON.stringify(data) }),
+    bulkCreate: (allocations: any[]) =>
+      request<any[]>('/mappings/actual-allocations/bulk', { method: 'POST', body: JSON.stringify({ allocations }) }),
+    update: (id: string, data: any) => request<any>(`/mappings/actual-allocations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request<any>(`/mappings/actual-allocations/${id}`, { method: 'DELETE' }),
+    deleteBySource: (sourceType: string, sourceId: string) =>
+      request<any>(`/mappings/actual-allocations/source/${sourceType}/${sourceId}`, { method: 'DELETE' }),
+  },
+
+  // Mapping Templates
+  templates: {
+    list: (projectId?: string) => request<any[]>(`/mappings/templates${projectId ? `?project_id=${projectId}` : ''}`),
+    get: (id: string) => request<any>(`/mappings/templates/${id}`),
+    create: (data: any) => request<any>('/mappings/templates', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: any) => request<any>(`/mappings/templates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request<any>(`/mappings/templates/${id}`, { method: 'DELETE' }),
+  },
+
+  // Validation & Matrix
+  validation: (projectId: string) => request<any>(`/mappings/validation/project/${projectId}`),
+  matrix: (projectId: string) => request<any>(`/mappings/matrix/project/${projectId}`),
+};

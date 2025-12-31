@@ -10,6 +10,7 @@ import claimRoutes from './routes/claims';
 import cashflowRoutes from './routes/cashflow';
 import dashboardRoutes from './routes/dashboard';
 import settingsRoutes from './routes/settings';
+import mappingRoutes from './routes/mappings';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -30,6 +31,7 @@ app.use('/api/claims', claimRoutes);
 app.use('/api/cashflow', cashflowRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/mappings', mappingRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

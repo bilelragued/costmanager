@@ -267,3 +267,154 @@ export interface CompanySettings {
   bank_facility_limit: number;
   gst_rate: number;
 }
+
+// ============================================================
+// MAPPING MODULE TYPES
+// ============================================================
+
+export interface ProgrammeTask {
+  id: string;
+  project_id: string;
+  code?: string;
+  name: string;
+  description?: string;
+  parent_id?: string;
+  level: number;
+  sort_order: number;
+  start_date?: string;
+  end_date?: string;
+  duration_days: number;
+  predecessor_id?: string;
+  predecessor_lag_days: number;
+  percent_complete: number;
+  color?: string;
+  created_at: string;
+  updated_at: string;
+  // Calculated fields from API
+  wbs_mapping_count?: number;
+  resource_mapping_count?: number;
+}
+
+export interface ProgrammeWbsMapping {
+  id: string;
+  project_id: string;
+  programme_task_id: string;
+  wbs_item_id: string;
+  allocation_type: 'percent' | 'fixed_value' | 'quantity_based' | 'duration_based';
+  allocation_percent: number;
+  allocation_value?: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  task_code?: string;
+  task_name?: string;
+  wbs_code?: string;
+  wbs_name?: string;
+  wbs_budget?: number;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface ResourceProgrammeMapping {
+  id: string;
+  programme_task_id: string;
+  resource_type: 'plant' | 'labour' | 'material' | 'subcontractor';
+  resource_id: string;
+  planned_quantity: number;
+  planned_rate: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  task_code?: string;
+  task_name?: string;
+  resource_code?: string;
+  resource_name?: string;
+}
+
+export interface AllocationRule {
+  id: string;
+  project_id?: string;
+  name: string;
+  description?: string;
+  rule_type: 'manual' | 'template' | 'auto';
+  source_type?: 'daily_log' | 'cost_entry' | 'plant_hours' | 'labour_hours' | 'material' | 'quantity';
+  match_criteria?: string;
+  is_active: boolean;
+  priority: number;
+  created_at: string;
+  updated_at: string;
+  target_count?: number;
+  targets?: AllocationRuleTarget[];
+}
+
+export interface AllocationRuleTarget {
+  id: string;
+  rule_id: string;
+  wbs_item_id: string;
+  allocation_type: 'percent' | 'fixed_value' | 'remainder';
+  allocation_percent?: number;
+  allocation_value?: number;
+  priority: number;
+  wbs_code?: string;
+  wbs_name?: string;
+}
+
+export interface ActualCostAllocation {
+  id: string;
+  source_type: 'plant_hours' | 'labour_hours' | 'material' | 'quantity' | 'cost_entry';
+  source_id: string;
+  wbs_item_id: string;
+  programme_task_id?: string;
+  allocated_quantity?: number;
+  allocated_value?: number;
+  allocation_method: 'manual' | 'rule' | 'auto' | 'direct';
+  rule_id?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  wbs_code?: string;
+  wbs_name?: string;
+  task_code?: string;
+  task_name?: string;
+}
+
+export interface MappingTemplate {
+  id: string;
+  project_id?: string;
+  name: string;
+  description?: string;
+  template_type: 'programme_wbs' | 'cost_allocation' | 'resource_schedule';
+  template_data: string;
+  is_global: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MappingValidation {
+  summary: {
+    total_tasks: number;
+    mapped_tasks: number;
+    unmapped_tasks: number;
+    total_wbs: number;
+    mapped_wbs: number;
+    unmapped_wbs: number;
+    total_mappings: number;
+    incomplete_allocations: number;
+    coverage_percent: number;
+    is_complete: boolean;
+  };
+  issues: {
+    unmapped_tasks: { id: string; code: string; name: string; issue_type: string }[];
+    unmapped_wbs: { id: string; code: string; name: string; issue_type: string }[];
+    incomplete_allocations: { id: string; code: string; name: string; total_percent: number; issue_type: string }[];
+  };
+}
+
+export interface MappingMatrix {
+  tasks: ProgrammeTask[];
+  wbs_items: WBSItem[];
+  mappings: ProgrammeWbsMapping[];
+  mapping_lookup: { [key: string]: ProgrammeWbsMapping };
+}

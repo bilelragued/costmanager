@@ -353,6 +353,146 @@ export function initializeDatabase() {
     );
 
     INSERT OR IGNORE INTO company_settings (id) VALUES ('default');
+
+    -- =====================================================
+    -- MAPPING MODULE TABLES
+    -- Enables flexible many-to-many relationships between
+    -- Programme Tasks, WBS Cost Items, Resources, and Actuals
+    -- =====================================================
+
+    -- Dedicated Programme Tasks (separate from WBS cost structure)
+    CREATE TABLE IF NOT EXISTS programme_tasks (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      code TEXT,
+      name TEXT NOT NULL,
+      description TEXT,
+      parent_id TEXT,
+      level INTEGER DEFAULT 1,
+      sort_order INTEGER DEFAULT 0,
+      start_date TEXT,
+      end_date TEXT,
+      duration_days INTEGER DEFAULT 0,
+      predecessor_id TEXT,
+      predecessor_lag_days INTEGER DEFAULT 0,
+      percent_complete REAL DEFAULT 0,
+      color TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_id) REFERENCES programme_tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (predecessor_id) REFERENCES programme_tasks(id) ON DELETE SET NULL
+    );
+
+    -- Programme Task ↔ WBS Item Mappings (many-to-many with allocation)
+    CREATE TABLE IF NOT EXISTS programme_wbs_mappings (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      programme_task_id TEXT NOT NULL,
+      wbs_item_id TEXT NOT NULL,
+      allocation_type TEXT DEFAULT 'percent' CHECK(allocation_type IN ('percent', 'fixed_value', 'quantity_based', 'duration_based')),
+      allocation_percent REAL DEFAULT 100,
+      allocation_value REAL,
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (programme_task_id) REFERENCES programme_tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (wbs_item_id) REFERENCES wbs_items(id) ON DELETE CASCADE,
+      UNIQUE(programme_task_id, wbs_item_id)
+    );
+
+    -- Resource ↔ Programme Task Mappings (for resource scheduling)
+    CREATE TABLE IF NOT EXISTS resource_programme_mappings (
+      id TEXT PRIMARY KEY,
+      programme_task_id TEXT NOT NULL,
+      resource_type TEXT NOT NULL CHECK(resource_type IN ('plant', 'labour', 'material', 'subcontractor')),
+      resource_id TEXT NOT NULL,
+      planned_quantity REAL DEFAULT 0,
+      planned_rate REAL DEFAULT 0,
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (programme_task_id) REFERENCES programme_tasks(id) ON DELETE CASCADE
+    );
+
+    -- Cost Allocation Rules (templates for distributing actuals)
+    CREATE TABLE IF NOT EXISTS allocation_rules (
+      id TEXT PRIMARY KEY,
+      project_id TEXT,
+      name TEXT NOT NULL,
+      description TEXT,
+      rule_type TEXT NOT NULL DEFAULT 'manual' CHECK(rule_type IN ('manual', 'template', 'auto')),
+      source_type TEXT CHECK(source_type IN ('daily_log', 'cost_entry', 'plant_hours', 'labour_hours', 'material', 'quantity')),
+      match_criteria TEXT,
+      is_active INTEGER DEFAULT 1,
+      priority INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
+    -- Allocation Rule Targets (where costs get distributed)
+    CREATE TABLE IF NOT EXISTS allocation_rule_targets (
+      id TEXT PRIMARY KEY,
+      rule_id TEXT NOT NULL,
+      wbs_item_id TEXT NOT NULL,
+      allocation_type TEXT DEFAULT 'percent' CHECK(allocation_type IN ('percent', 'fixed_value', 'remainder')),
+      allocation_percent REAL,
+      allocation_value REAL,
+      priority INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (rule_id) REFERENCES allocation_rules(id) ON DELETE CASCADE,
+      FOREIGN KEY (wbs_item_id) REFERENCES wbs_items(id) ON DELETE CASCADE
+    );
+
+    -- Actual Cost Allocations (realized distribution of actuals to WBS)
+    CREATE TABLE IF NOT EXISTS actual_cost_allocations (
+      id TEXT PRIMARY KEY,
+      source_type TEXT NOT NULL CHECK(source_type IN ('plant_hours', 'labour_hours', 'material', 'quantity', 'cost_entry')),
+      source_id TEXT NOT NULL,
+      wbs_item_id TEXT NOT NULL,
+      programme_task_id TEXT,
+      allocated_quantity REAL,
+      allocated_value REAL,
+      allocation_method TEXT DEFAULT 'manual' CHECK(allocation_method IN ('manual', 'rule', 'auto', 'direct')),
+      rule_id TEXT,
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (wbs_item_id) REFERENCES wbs_items(id) ON DELETE CASCADE,
+      FOREIGN KEY (programme_task_id) REFERENCES programme_tasks(id) ON DELETE SET NULL,
+      FOREIGN KEY (rule_id) REFERENCES allocation_rules(id) ON DELETE SET NULL
+    );
+
+    -- Mapping Templates (reusable mapping patterns)
+    CREATE TABLE IF NOT EXISTS mapping_templates (
+      id TEXT PRIMARY KEY,
+      project_id TEXT,
+      name TEXT NOT NULL,
+      description TEXT,
+      template_type TEXT NOT NULL CHECK(template_type IN ('programme_wbs', 'cost_allocation', 'resource_schedule')),
+      template_data TEXT NOT NULL,
+      is_global INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
+    -- Mapping Validation Log (tracks unmapped items and validation issues)
+    CREATE TABLE IF NOT EXISTS mapping_validation_log (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      validation_type TEXT NOT NULL CHECK(validation_type IN ('unmapped_task', 'unmapped_wbs', 'incomplete_allocation', 'orphaned_actual')),
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      message TEXT,
+      severity TEXT DEFAULT 'warning' CHECK(severity IN ('info', 'warning', 'error')),
+      resolved INTEGER DEFAULT 0,
+      resolved_at TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    );
   `);
 
   console.log('Database initialized successfully');
