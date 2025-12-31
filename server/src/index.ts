@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import db, { initializeDatabase } from './database';
 import projectRoutes from './routes/projects';
 import resourceRoutes from './routes/resources';
@@ -20,7 +21,7 @@ app.use(express.json());
 // Initialize database
 initializeDatabase();
 
-// Routes
+// API Routes
 app.use('/api/projects', projectRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/wbs', wbsRoutes);
@@ -33,6 +34,15 @@ app.use('/api/settings', settingsRoutes);
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Serve static files in production
+const clientBuildPath = path.join(__dirname, '../../client/dist');
+app.use(express.static(clientBuildPath));
+
+// SPA fallback - serve index.html for all non-API routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(clientBuildPath, 'index.html'));
 });
 
 // Error handling

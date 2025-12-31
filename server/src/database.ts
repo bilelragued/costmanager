@@ -1,7 +1,8 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 
-const dbPath = path.join(__dirname, '..', 'constructflow.db');
+// Use DATABASE_PATH env var for Railway volume, fallback to local path
+const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '..', 'constructflow.db');
 const db = new Database(dbPath);
 
 // Enable foreign keys
