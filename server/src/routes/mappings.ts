@@ -976,13 +976,24 @@ router.get('/validation/project/:projectId', (req, res) => {
       HAVING total_percent < 99.9 OR total_percent > 100.1
     `).all(projectId) as any[];
 
+    // Unmapped deliverables (no programme or WBS links)
+    const unmappedDeliverables = db.prepare(`
+      SELECT ri.id, ri.code, ri.name, 'unmapped_deliverable' as issue_type
+      FROM revenue_items ri
+      WHERE ri.project_id = ?
+      AND NOT EXISTS (SELECT 1 FROM programme_revenue_mappings WHERE revenue_item_id = ri.id)
+      AND NOT EXISTS (SELECT 1 FROM wbs_revenue_mappings WHERE revenue_item_id = ri.id)
+    `).all(projectId) as any[];
+
     // Calculate summary stats
     const totalTasks = (db.prepare('SELECT COUNT(*) as count FROM programme_tasks WHERE project_id = ?').get(projectId) as any).count;
     const totalWbs = (db.prepare('SELECT COUNT(*) as count FROM wbs_items WHERE project_id = ?').get(projectId) as any).count;
+    const totalDeliverables = (db.prepare('SELECT COUNT(*) as count FROM revenue_items WHERE project_id = ?').get(projectId) as any).count;
     const totalMappings = (db.prepare('SELECT COUNT(*) as count FROM programme_wbs_mappings WHERE project_id = ?').get(projectId) as any).count;
 
     const mappedTasks = totalTasks - unmappedTasks.length;
     const mappedWbs = totalWbs - unmappedWbs.length;
+    const mappedDeliverables = totalDeliverables - unmappedDeliverables.length;
 
     res.json({
       summary: {
@@ -992,6 +1003,9 @@ router.get('/validation/project/:projectId', (req, res) => {
         total_wbs: totalWbs,
         mapped_wbs: mappedWbs,
         unmapped_wbs: unmappedWbs.length,
+        total_deliverables: totalDeliverables,
+        mapped_deliverables: mappedDeliverables,
+        unmapped_deliverables: unmappedDeliverables.length,
         total_mappings: totalMappings,
         incomplete_allocations: incompleteAllocations.length,
         coverage_percent: totalTasks > 0 ? Math.round((mappedTasks / totalTasks) * 100) : 0,
@@ -1000,6 +1014,7 @@ router.get('/validation/project/:projectId', (req, res) => {
       issues: {
         unmapped_tasks: unmappedTasks,
         unmapped_wbs: unmappedWbs,
+        unmapped_deliverables: unmappedDeliverables,
         incomplete_allocations: incompleteAllocations
       }
     });
@@ -1358,6 +1373,378 @@ router.get('/matrix/project/:projectId', (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to get mapping matrix' });
+  }
+});
+
+// ============================================================
+// PROGRAMME-REVENUE MAPPINGS
+// ============================================================
+
+// Get all programme-revenue mappings for a project
+router.get('/programme-revenue/project/:projectId', (req, res) => {
+  try {
+    const mappings = db.prepare(`
+      SELECT prm.*,
+        pt.code as task_code, pt.name as task_name,
+        ri.code as revenue_code, ri.name as revenue_name, ri.contract_value
+      FROM programme_revenue_mappings prm
+      JOIN programme_tasks pt ON prm.programme_task_id = pt.id
+      JOIN revenue_items ri ON prm.revenue_item_id = ri.id
+      WHERE prm.project_id = ?
+      ORDER BY pt.sort_order, ri.sort_order
+    `).all(req.params.projectId);
+
+    res.json(mappings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch programme-revenue mappings' });
+  }
+});
+
+// Get programme-revenue mappings for a specific task
+router.get('/programme-revenue/task/:taskId', (req, res) => {
+  try {
+    const mappings = db.prepare(`
+      SELECT prm.*,
+        ri.code as revenue_code, ri.name as revenue_name,
+        ri.contract_quantity, ri.contract_rate, ri.contract_value
+      FROM programme_revenue_mappings prm
+      JOIN revenue_items ri ON prm.revenue_item_id = ri.id
+      WHERE prm.programme_task_id = ?
+    `).all(req.params.taskId);
+
+    res.json(mappings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch task revenue mappings' });
+  }
+});
+
+// Get programme-revenue mappings for a specific revenue item
+router.get('/programme-revenue/revenue/:revenueId', (req, res) => {
+  try {
+    const mappings = db.prepare(`
+      SELECT prm.*,
+        pt.code as task_code, pt.name as task_name,
+        pt.start_date, pt.end_date, pt.duration_days
+      FROM programme_revenue_mappings prm
+      JOIN programme_tasks pt ON prm.programme_task_id = pt.id
+      WHERE prm.revenue_item_id = ?
+    `).all(req.params.revenueId);
+
+    res.json(mappings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch revenue programme mappings' });
+  }
+});
+
+// Create programme-revenue mapping
+router.post('/programme-revenue', (req, res) => {
+  try {
+    const id = uuidv4();
+    const {
+      project_id,
+      programme_task_id,
+      revenue_item_id,
+      allocation_type = 'percent',
+      allocation_percent = 100,
+      allocation_value,
+      notes
+    } = req.body;
+
+    db.prepare(`
+      INSERT INTO programme_revenue_mappings (
+        id, project_id, programme_task_id, revenue_item_id,
+        allocation_type, allocation_percent, allocation_value, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, project_id, programme_task_id, revenue_item_id,
+      allocation_type, allocation_percent, allocation_value, notes
+    );
+
+    const mapping = db.prepare(`
+      SELECT prm.*,
+        pt.code as task_code, pt.name as task_name,
+        ri.code as revenue_code, ri.name as revenue_name
+      FROM programme_revenue_mappings prm
+      JOIN programme_tasks pt ON prm.programme_task_id = pt.id
+      JOIN revenue_items ri ON prm.revenue_item_id = ri.id
+      WHERE prm.id = ?
+    `).get(id);
+
+    res.status(201).json(mapping);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to create programme-revenue mapping' });
+  }
+});
+
+// Bulk create programme-revenue mappings
+router.post('/programme-revenue/bulk', (req, res) => {
+  try {
+    const { project_id, mappings } = req.body;
+
+    const insertStmt = db.prepare(`
+      INSERT OR REPLACE INTO programme_revenue_mappings (
+        id, project_id, programme_task_id, revenue_item_id,
+        allocation_type, allocation_percent, allocation_value, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const transaction = db.transaction((mappingsToCreate: any[]) => {
+      for (const mapping of mappingsToCreate) {
+        const id = mapping.id || uuidv4();
+        insertStmt.run(
+          id,
+          project_id,
+          mapping.programme_task_id,
+          mapping.revenue_item_id,
+          mapping.allocation_type || 'percent',
+          mapping.allocation_percent || 100,
+          mapping.allocation_value || null,
+          mapping.notes || null
+        );
+      }
+    });
+
+    transaction(mappings);
+
+    res.json({ success: true, created: mappings.length });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to bulk create programme-revenue mappings' });
+  }
+});
+
+// Update programme-revenue mapping
+router.put('/programme-revenue/:id', (req, res) => {
+  try {
+    const {
+      allocation_type,
+      allocation_percent,
+      allocation_value,
+      notes
+    } = req.body;
+
+    db.prepare(`
+      UPDATE programme_revenue_mappings
+      SET allocation_type = ?, allocation_percent = ?, allocation_value = ?, notes = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(allocation_type, allocation_percent, allocation_value, notes, req.params.id);
+
+    const mapping = db.prepare(`
+      SELECT prm.*,
+        pt.code as task_code, pt.name as task_name,
+        ri.code as revenue_code, ri.name as revenue_name
+      FROM programme_revenue_mappings prm
+      JOIN programme_tasks pt ON prm.programme_task_id = pt.id
+      JOIN revenue_items ri ON prm.revenue_item_id = ri.id
+      WHERE prm.id = ?
+    `).get(req.params.id);
+
+    res.json(mapping);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to update programme-revenue mapping' });
+  }
+});
+
+// Delete programme-revenue mapping
+router.delete('/programme-revenue/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM programme_revenue_mappings WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to delete programme-revenue mapping' });
+  }
+});
+
+// ============================================================
+// WBS-REVENUE MAPPINGS
+// ============================================================
+
+// Get all wbs-revenue mappings for a project
+router.get('/wbs-revenue/project/:projectId', (req, res) => {
+  try {
+    const mappings = db.prepare(`
+      SELECT wrm.*,
+        w.code as wbs_code, w.name as wbs_name, w.total_cost,
+        ri.code as revenue_code, ri.name as revenue_name, ri.contract_value
+      FROM wbs_revenue_mappings wrm
+      JOIN wbs_items w ON wrm.wbs_item_id = w.id
+      JOIN revenue_items ri ON wrm.revenue_item_id = ri.id
+      WHERE wrm.project_id = ?
+      ORDER BY w.code, ri.code
+    `).all(req.params.projectId);
+
+    res.json(mappings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch wbs-revenue mappings' });
+  }
+});
+
+// Get wbs-revenue mappings for a specific WBS item
+router.get('/wbs-revenue/wbs/:wbsId', (req, res) => {
+  try {
+    const mappings = db.prepare(`
+      SELECT wrm.*,
+        ri.code as revenue_code, ri.name as revenue_name,
+        ri.contract_quantity, ri.contract_rate, ri.contract_value
+      FROM wbs_revenue_mappings wrm
+      JOIN revenue_items ri ON wrm.revenue_item_id = ri.id
+      WHERE wrm.wbs_item_id = ?
+    `).all(req.params.wbsId);
+
+    res.json(mappings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch WBS revenue mappings' });
+  }
+});
+
+// Get wbs-revenue mappings for a specific revenue item
+router.get('/wbs-revenue/revenue/:revenueId', (req, res) => {
+  try {
+    const mappings = db.prepare(`
+      SELECT wrm.*,
+        w.code as wbs_code, w.name as wbs_name,
+        w.quantity, w.unit, w.total_cost
+      FROM wbs_revenue_mappings wrm
+      JOIN wbs_items w ON wrm.wbs_item_id = w.id
+      WHERE wrm.revenue_item_id = ?
+    `).all(req.params.revenueId);
+
+    res.json(mappings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch revenue WBS mappings' });
+  }
+});
+
+// Create wbs-revenue mapping
+router.post('/wbs-revenue', (req, res) => {
+  try {
+    const id = uuidv4();
+    const {
+      project_id,
+      wbs_item_id,
+      revenue_item_id,
+      allocation_type = 'percent',
+      allocation_percent = 100,
+      allocation_value,
+      notes
+    } = req.body;
+
+    db.prepare(`
+      INSERT INTO wbs_revenue_mappings (
+        id, project_id, wbs_item_id, revenue_item_id,
+        allocation_type, allocation_percent, allocation_value, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, project_id, wbs_item_id, revenue_item_id,
+      allocation_type, allocation_percent, allocation_value, notes
+    );
+
+    const mapping = db.prepare(`
+      SELECT wrm.*,
+        w.code as wbs_code, w.name as wbs_name,
+        ri.code as revenue_code, ri.name as revenue_name
+      FROM wbs_revenue_mappings wrm
+      JOIN wbs_items w ON wrm.wbs_item_id = w.id
+      JOIN revenue_items ri ON wrm.revenue_item_id = ri.id
+      WHERE wrm.id = ?
+    `).get(id);
+
+    res.status(201).json(mapping);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to create wbs-revenue mapping' });
+  }
+});
+
+// Bulk create wbs-revenue mappings
+router.post('/wbs-revenue/bulk', (req, res) => {
+  try {
+    const { project_id, mappings } = req.body;
+
+    const insertStmt = db.prepare(`
+      INSERT OR REPLACE INTO wbs_revenue_mappings (
+        id, project_id, wbs_item_id, revenue_item_id,
+        allocation_type, allocation_percent, allocation_value, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const transaction = db.transaction((mappingsToCreate: any[]) => {
+      for (const mapping of mappingsToCreate) {
+        const id = mapping.id || uuidv4();
+        insertStmt.run(
+          id,
+          project_id,
+          mapping.wbs_item_id,
+          mapping.revenue_item_id,
+          mapping.allocation_type || 'percent',
+          mapping.allocation_percent || 100,
+          mapping.allocation_value || null,
+          mapping.notes || null
+        );
+      }
+    });
+
+    transaction(mappings);
+
+    res.json({ success: true, created: mappings.length });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to bulk create wbs-revenue mappings' });
+  }
+});
+
+// Update wbs-revenue mapping
+router.put('/wbs-revenue/:id', (req, res) => {
+  try {
+    const {
+      allocation_type,
+      allocation_percent,
+      allocation_value,
+      notes
+    } = req.body;
+
+    db.prepare(`
+      UPDATE wbs_revenue_mappings
+      SET allocation_type = ?, allocation_percent = ?, allocation_value = ?, notes = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(allocation_type, allocation_percent, allocation_value, notes, req.params.id);
+
+    const mapping = db.prepare(`
+      SELECT wrm.*,
+        w.code as wbs_code, w.name as wbs_name,
+        ri.code as revenue_code, ri.name as revenue_name
+      FROM wbs_revenue_mappings wrm
+      JOIN wbs_items w ON wrm.wbs_item_id = w.id
+      JOIN revenue_items ri ON wrm.revenue_item_id = ri.id
+      WHERE wrm.id = ?
+    `).get(req.params.id);
+
+    res.json(mapping);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to update wbs-revenue mapping' });
+  }
+});
+
+// Delete wbs-revenue mapping
+router.delete('/wbs-revenue/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM wbs_revenue_mappings WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to delete wbs-revenue mapping' });
   }
 });
 

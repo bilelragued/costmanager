@@ -251,10 +251,18 @@ export function initializeDatabase() {
       payment_due_date TEXT,
       payment_date TEXT,
       status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'paid')),
+      vendor_name TEXT,
+      ai_suggested INTEGER DEFAULT 0,
+      suggestion_id TEXT,
+      programme_task_id TEXT,
+      revenue_item_id TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-      FOREIGN KEY (wbs_item_id) REFERENCES wbs_items(id)
+      FOREIGN KEY (wbs_item_id) REFERENCES wbs_items(id),
+      FOREIGN KEY (programme_task_id) REFERENCES programme_tasks(id),
+      FOREIGN KEY (revenue_item_id) REFERENCES revenue_items(id),
+      FOREIGN KEY (suggestion_id) REFERENCES cost_assignment_suggestions(id)
     );
 
     -- Variations
@@ -493,6 +501,219 @@ export function initializeDatabase() {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
     );
+
+    -- =====================================================
+    -- Revenue Items (Schedule of Prices / Pay Items)
+    -- =====================================================
+
+    -- Revenue Items Table
+    CREATE TABLE IF NOT EXISTS revenue_items (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      code TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      parent_id TEXT,
+      level INTEGER DEFAULT 1,
+      sort_order INTEGER DEFAULT 0,
+      unit TEXT,
+      contract_quantity REAL DEFAULT 0,
+      contract_rate REAL DEFAULT 0,
+      contract_value REAL DEFAULT 0,
+      payment_milestone INTEGER DEFAULT 0,
+      payment_percent REAL DEFAULT 0,
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_id) REFERENCES revenue_items(id) ON DELETE CASCADE
+    );
+
+    -- Programme Task ↔ Revenue Item Mappings
+    CREATE TABLE IF NOT EXISTS programme_revenue_mappings (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      programme_task_id TEXT NOT NULL,
+      revenue_item_id TEXT NOT NULL,
+      allocation_type TEXT DEFAULT 'percent' CHECK(allocation_type IN ('percent', 'fixed_value', 'quantity_based')),
+      allocation_percent REAL DEFAULT 100,
+      allocation_value REAL,
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (programme_task_id) REFERENCES programme_tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (revenue_item_id) REFERENCES revenue_items(id) ON DELETE CASCADE,
+      UNIQUE(programme_task_id, revenue_item_id)
+    );
+
+    -- WBS Item ↔ Revenue Item Mappings
+    CREATE TABLE IF NOT EXISTS wbs_revenue_mappings (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      wbs_item_id TEXT NOT NULL,
+      revenue_item_id TEXT NOT NULL,
+      allocation_type TEXT DEFAULT 'percent' CHECK(allocation_type IN ('percent', 'fixed_value')),
+      allocation_percent REAL DEFAULT 100,
+      allocation_value REAL,
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (wbs_item_id) REFERENCES wbs_items(id) ON DELETE CASCADE,
+      FOREIGN KEY (revenue_item_id) REFERENCES revenue_items(id) ON DELETE CASCADE,
+      UNIQUE(wbs_item_id, revenue_item_id)
+    );
+
+    -- =====================================================
+    -- AI Cost Assignment System
+    -- =====================================================
+
+    -- AI-Generated Cost Assignment Suggestions
+    CREATE TABLE IF NOT EXISTS cost_assignment_suggestions (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      source_type TEXT NOT NULL CHECK(source_type IN ('cost_entry', 'daily_log', 'plant_hours', 'labour_hours', 'material')),
+      source_id TEXT NOT NULL,
+      transaction_description TEXT,
+      vendor_name TEXT,
+      transaction_date TEXT,
+      amount REAL,
+      suggested_wbs_item_id TEXT,
+      suggested_programme_task_id TEXT,
+      suggested_revenue_item_id TEXT,
+      confidence_score REAL DEFAULT 0,
+      reasoning TEXT,
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'rejected', 'modified')),
+      user_feedback TEXT,
+      accepted_wbs_item_id TEXT,
+      accepted_programme_task_id TEXT,
+      accepted_revenue_item_id TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (suggested_wbs_item_id) REFERENCES wbs_items(id) ON DELETE SET NULL,
+      FOREIGN KEY (suggested_programme_task_id) REFERENCES programme_tasks(id) ON DELETE SET NULL,
+      FOREIGN KEY (suggested_revenue_item_id) REFERENCES revenue_items(id) ON DELETE SET NULL,
+      FOREIGN KEY (accepted_wbs_item_id) REFERENCES wbs_items(id) ON DELETE SET NULL,
+      FOREIGN KEY (accepted_programme_task_id) REFERENCES programme_tasks(id) ON DELETE SET NULL,
+      FOREIGN KEY (accepted_revenue_item_id) REFERENCES revenue_items(id) ON DELETE SET NULL
+    );
+
+    -- Assignment Learning History (pattern recognition)
+    CREATE TABLE IF NOT EXISTS assignment_learning_history (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      vendor_name TEXT,
+      description_pattern TEXT,
+      cost_type TEXT,
+      wbs_item_id TEXT,
+      programme_task_id TEXT,
+      revenue_item_id TEXT,
+      frequency INTEGER DEFAULT 1,
+      last_used TEXT DEFAULT CURRENT_TIMESTAMP,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (wbs_item_id) REFERENCES wbs_items(id) ON DELETE CASCADE,
+      FOREIGN KEY (programme_task_id) REFERENCES programme_tasks(id) ON DELETE SET NULL,
+      FOREIGN KEY (revenue_item_id) REFERENCES revenue_items(id) ON DELETE SET NULL
+    );
+
+    -- Vendor Intelligence Patterns
+    CREATE TABLE IF NOT EXISTS vendor_patterns (
+      id TEXT PRIMARY KEY,
+      vendor_name TEXT NOT NULL,
+      primary_cost_type TEXT,
+      typical_wbs_codes TEXT,
+      typical_programme_codes TEXT,
+      typical_revenue_codes TEXT,
+      project_id TEXT,
+      confidence REAL DEFAULT 0,
+      transaction_count INTEGER DEFAULT 1,
+      last_updated TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
+    -- Multi-Assignment Support (split costs across multiple targets)
+    CREATE TABLE IF NOT EXISTS cost_multi_assignments (
+      id TEXT PRIMARY KEY,
+      cost_assignment_suggestion_id TEXT NOT NULL,
+      wbs_item_id TEXT,
+      programme_task_id TEXT,
+      revenue_item_id TEXT,
+      allocation_percent REAL DEFAULT 100,
+      allocation_value REAL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (cost_assignment_suggestion_id) REFERENCES cost_assignment_suggestions(id) ON DELETE CASCADE,
+      FOREIGN KEY (wbs_item_id) REFERENCES wbs_items(id) ON DELETE CASCADE,
+      FOREIGN KEY (programme_task_id) REFERENCES programme_tasks(id) ON DELETE SET NULL,
+      FOREIGN KEY (revenue_item_id) REFERENCES revenue_items(id) ON DELETE SET NULL
+    );
+
+    -- =====================================================
+    -- PERFORMANCE INDEXES
+    -- =====================================================
+
+    -- Projects indexes
+    CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
+    CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(created_at);
+
+    -- WBS indexes (frequently queried by project and parent)
+    CREATE INDEX IF NOT EXISTS idx_wbs_items_project_id ON wbs_items(project_id);
+    CREATE INDEX IF NOT EXISTS idx_wbs_items_parent_id ON wbs_items(parent_id);
+    CREATE INDEX IF NOT EXISTS idx_wbs_items_project_level ON wbs_items(project_id, level);
+
+    -- Resource assignment indexes
+    CREATE INDEX IF NOT EXISTS idx_wbs_plant_assignments_wbs_id ON wbs_plant_assignments(wbs_item_id);
+    CREATE INDEX IF NOT EXISTS idx_wbs_labour_assignments_wbs_id ON wbs_labour_assignments(wbs_item_id);
+    CREATE INDEX IF NOT EXISTS idx_wbs_material_assignments_wbs_id ON wbs_material_assignments(wbs_item_id);
+    CREATE INDEX IF NOT EXISTS idx_wbs_subcontractor_assignments_wbs_id ON wbs_subcontractor_assignments(wbs_item_id);
+
+    -- Daily logs indexes
+    CREATE INDEX IF NOT EXISTS idx_daily_logs_project_id ON daily_logs(project_id);
+    CREATE INDEX IF NOT EXISTS idx_daily_logs_date ON daily_logs(log_date);
+    CREATE INDEX IF NOT EXISTS idx_actual_plant_hours_log_id ON actual_plant_hours(daily_log_id);
+    CREATE INDEX IF NOT EXISTS idx_actual_labour_hours_log_id ON actual_labour_hours(daily_log_id);
+    CREATE INDEX IF NOT EXISTS idx_actual_materials_log_id ON actual_materials(daily_log_id);
+    CREATE INDEX IF NOT EXISTS idx_actual_quantities_log_id ON actual_quantities(daily_log_id);
+
+    -- Cost entries indexes
+    CREATE INDEX IF NOT EXISTS idx_cost_entries_project_id ON cost_entries(project_id);
+    CREATE INDEX IF NOT EXISTS idx_cost_entries_wbs_id ON cost_entries(wbs_item_id);
+    CREATE INDEX IF NOT EXISTS idx_cost_entries_status ON cost_entries(status);
+    CREATE INDEX IF NOT EXISTS idx_cost_entries_vendor ON cost_entries(vendor_name);
+
+    -- Claims indexes
+    CREATE INDEX IF NOT EXISTS idx_progress_claims_project_id ON progress_claims(project_id);
+    CREATE INDEX IF NOT EXISTS idx_progress_claims_status ON progress_claims(status);
+    CREATE INDEX IF NOT EXISTS idx_claim_line_items_claim_id ON claim_line_items(claim_id);
+
+    -- Variations indexes
+    CREATE INDEX IF NOT EXISTS idx_variations_project_id ON variations(project_id);
+    CREATE INDEX IF NOT EXISTS idx_variations_status ON variations(status);
+
+    -- Programme tasks indexes
+    CREATE INDEX IF NOT EXISTS idx_programme_tasks_project_id ON programme_tasks(project_id);
+    CREATE INDEX IF NOT EXISTS idx_programme_tasks_parent_id ON programme_tasks(parent_id);
+
+    -- Mapping indexes
+    CREATE INDEX IF NOT EXISTS idx_programme_wbs_mappings_project_id ON programme_wbs_mappings(project_id);
+    CREATE INDEX IF NOT EXISTS idx_programme_wbs_mappings_task_id ON programme_wbs_mappings(programme_task_id);
+    CREATE INDEX IF NOT EXISTS idx_programme_wbs_mappings_wbs_id ON programme_wbs_mappings(wbs_item_id);
+    CREATE INDEX IF NOT EXISTS idx_resource_programme_mappings_task_id ON resource_programme_mappings(programme_task_id);
+    CREATE INDEX IF NOT EXISTS idx_actual_cost_allocations_wbs_id ON actual_cost_allocations(wbs_item_id);
+    CREATE INDEX IF NOT EXISTS idx_actual_cost_allocations_source ON actual_cost_allocations(source_type, source_id);
+
+    -- Revenue indexes
+    CREATE INDEX IF NOT EXISTS idx_revenue_items_project_id ON revenue_items(project_id);
+    CREATE INDEX IF NOT EXISTS idx_programme_revenue_mappings_project_id ON programme_revenue_mappings(project_id);
+    CREATE INDEX IF NOT EXISTS idx_wbs_revenue_mappings_project_id ON wbs_revenue_mappings(project_id);
+
+    -- AI indexes
+    CREATE INDEX IF NOT EXISTS idx_cost_assignment_suggestions_project_id ON cost_assignment_suggestions(project_id);
+    CREATE INDEX IF NOT EXISTS idx_cost_assignment_suggestions_status ON cost_assignment_suggestions(status);
+    CREATE INDEX IF NOT EXISTS idx_assignment_learning_history_project_id ON assignment_learning_history(project_id);
+    CREATE INDEX IF NOT EXISTS idx_vendor_patterns_vendor ON vendor_patterns(vendor_name);
   `);
 
   console.log('Database initialized successfully');

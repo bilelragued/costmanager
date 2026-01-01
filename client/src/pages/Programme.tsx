@@ -5,7 +5,7 @@ import { mappingsApi, projectsApi } from '../services/api';
 import { formatDate, formatShortDate } from '../utils/format';
 import {
   ArrowLeft, Calendar, RefreshCw, ChevronRight, ChevronDown,
-  Plus, Edit2, Trash2, Link as LinkIcon, X, Save,
+  Plus, Edit2, Trash2, X, Save,
   AlertCircle, CheckCircle
 } from 'lucide-react';
 import type { ProgrammeTask } from '../types';
@@ -193,10 +193,6 @@ export default function Programme() {
               {validation.summary.coverage_percent}% mapped
             </div>
           )}
-          <Link to={`/projects/${projectId}/mappings`} className="btn btn-secondary flex items-center gap-2">
-            <LinkIcon className="w-4 h-4" />
-            Manage Mappings
-          </Link>
           <button
             onClick={() => { setParentTaskId(null); setShowAddModal(true); }}
             className="btn btn-primary flex items-center gap-2"
@@ -241,7 +237,7 @@ export default function Programme() {
             Activity
           </div>
           <div className="w-24 flex-shrink-0 px-2 py-2 bg-gray-50 text-xs text-center text-gray-500 border-r border-gray-200">
-            WBS Links
+            Cost Links
           </div>
           <div className="flex-1 flex bg-gray-50">
             {weeks.map((week, idx) => (

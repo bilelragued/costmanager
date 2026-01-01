@@ -13,7 +13,8 @@ import {
   AlertTriangle,
   BarChart3,
   Settings,
-  ChevronRight
+  ChevronRight,
+  Link2
 } from 'lucide-react';
 
 export default function ProjectDetail() {
@@ -50,8 +51,9 @@ export default function ProjectDetail() {
   const isTender = project.status === 'tender';
 
   const navLinks = [
-    { path: 'wbs', icon: FileText, label: 'WBS / Estimate' },
+    { path: 'wbs', icon: FileText, label: 'Cost Breakdown' },
     { path: 'programme', icon: Calendar, label: 'Programme' },
+    { path: 'mappings', icon: Link2, label: 'Mappings' },
     { path: 'costs', icon: DollarSign, label: 'Costs' },
     { path: 'claims', icon: BarChart3, label: 'Claims' },
     { path: 'cashflow', icon: TrendingUp, label: 'Cashflow' },
@@ -104,7 +106,7 @@ export default function ProjectDetail() {
       </div>
 
       {/* Navigation Links */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
         {navLinks.map((link) => (
           <Link
             key={link.path}

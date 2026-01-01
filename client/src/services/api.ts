@@ -211,4 +211,77 @@ export const mappingsApi = {
   // Validation & Matrix
   validation: (projectId: string) => request<any>(`/mappings/validation/project/${projectId}`),
   matrix: (projectId: string) => request<any>(`/mappings/matrix/project/${projectId}`),
+
+  // Programme-Revenue Mappings
+  programmeRevenue: {
+    listByProject: (projectId: string) => request<any[]>(`/mappings/programme-revenue/project/${projectId}`),
+    listByTask: (taskId: string) => request<any[]>(`/mappings/programme-revenue/task/${taskId}`),
+    listByRevenue: (revenueId: string) => request<any[]>(`/mappings/programme-revenue/revenue/${revenueId}`),
+    create: (data: any) => request<any>('/mappings/programme-revenue', { method: 'POST', body: JSON.stringify(data) }),
+    bulkCreate: (data: any) => request<any>('/mappings/programme-revenue/bulk', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: any) => request<any>(`/mappings/programme-revenue/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request<any>(`/mappings/programme-revenue/${id}`, { method: 'DELETE' }),
+  },
+
+  // WBS-Revenue Mappings
+  wbsRevenue: {
+    listByProject: (projectId: string) => request<any[]>(`/mappings/wbs-revenue/project/${projectId}`),
+    listByWbs: (wbsId: string) => request<any[]>(`/mappings/wbs-revenue/wbs/${wbsId}`),
+    listByRevenue: (revenueId: string) => request<any[]>(`/mappings/wbs-revenue/revenue/${revenueId}`),
+    create: (data: any) => request<any>('/mappings/wbs-revenue', { method: 'POST', body: JSON.stringify(data) }),
+    bulkCreate: (data: any) => request<any>('/mappings/wbs-revenue/bulk', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: any) => request<any>(`/mappings/wbs-revenue/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request<any>(`/mappings/wbs-revenue/${id}`, { method: 'DELETE' }),
+  },
+};
+
+// Revenue Items API
+export const revenueApi = {
+  list: (projectId: string) => request<any[]>(`/revenue/project/${projectId}`),
+  get: (id: string) => request<any>(`/revenue/${id}`),
+  create: (data: any) => request<any>('/revenue', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: any) => request<any>(`/revenue/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => request<any>(`/revenue/${id}`, { method: 'DELETE' }),
+  importFromWbs: (projectId: string) => request<any>(`/revenue/import-from-wbs/${projectId}`, { method: 'POST' }),
+};
+
+// AI Cost Assignment API
+export const aiApi = {
+  suggestAssignment: (data: {
+    project_id: string;
+    description: string;
+    vendor_name?: string;
+    amount: number;
+    transaction_date: string;
+    cost_type?: string;
+  }) => request<{ suggestions: any[] }>('/ai/suggest-assignment', { method: 'POST', body: JSON.stringify(data) }),
+
+  acceptSuggestion: (suggestionId: string, modifications?: any) =>
+    request<any>(`/ai/suggestion/${suggestionId}/accept`, {
+      method: 'POST',
+      body: JSON.stringify({ modifications: modifications || null })
+    }),
+
+  rejectSuggestion: (suggestionId: string, reason?: string) =>
+    request<any>(`/ai/suggestion/${suggestionId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || null })
+    }),
+
+  batchAssign: (projectId: string, options?: { source_type?: string; source_ids?: string[] }) =>
+    request<{ processed: number; suggestions: any[] }>(
+      `/ai/batch-assign/${projectId}`,
+      { method: 'POST', body: JSON.stringify(options || {}) }
+    ),
+
+  getPendingSuggestions: (projectId: string, status = 'pending') =>
+    request<any[]>(`/ai/suggestions/${projectId}?status=${status}`),
+
+  getVendorPatterns: (projectId: string) =>
+    request<any[]>(`/ai/vendor-patterns/${projectId}`),
+
+  train: (projectId: string) =>
+    request<any>(`/ai/train/${projectId}`, { method: 'POST' }),
+
+  getStatus: () => request<{ enabled: boolean; message: string }>('/ai/status'),
 };

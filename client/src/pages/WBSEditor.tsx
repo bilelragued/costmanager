@@ -98,7 +98,7 @@ export default function WBSEditor() {
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Work Breakdown Structure</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Cost Breakdown</h1>
             <p className="text-gray-500">{project?.name}</p>
           </div>
         </div>
@@ -107,7 +107,7 @@ export default function WBSEditor() {
           className="btn btn-primary flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
-          Add WBS Item
+          Add Cost Item
         </button>
       </div>
 
@@ -159,13 +159,13 @@ export default function WBSEditor() {
             {isLoading ? (
               <tr>
                 <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
-                  Loading WBS items...
+                  Loading cost items...
                 </td>
               </tr>
             ) : wbsItems.length === 0 ? (
               <tr>
                 <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
-                  No WBS items. Click "Add WBS Item" to create one.
+                  No cost items. Click "Add Cost Item" to create one.
                 </td>
               </tr>
             ) : (
@@ -240,7 +240,7 @@ export default function WBSEditor() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (confirm('Delete this WBS item?')) {
+                          if (confirm('Delete this cost item?')) {
                             deleteMutation.mutate(item.id);
                           }
                         }}
@@ -262,7 +262,7 @@ export default function WBSEditor() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="card w-full max-w-lg max-h-[90vh] overflow-auto">
             <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Add WBS Item</h2>
+              <h2 className="text-lg font-semibold">Add Cost Item</h2>
               <button onClick={() => setShowAddForm(false)} className="p-1 hover:bg-gray-100 rounded">
                 <X className="w-5 h-5" />
               </button>

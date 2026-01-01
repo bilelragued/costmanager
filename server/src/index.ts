@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import db, { initializeDatabase } from './database';
+import { errorHandler, requestLogger } from './middleware/errorHandler';
 import projectRoutes from './routes/projects';
 import resourceRoutes from './routes/resources';
 import wbsRoutes from './routes/wbs';
@@ -11,6 +12,8 @@ import cashflowRoutes from './routes/cashflow';
 import dashboardRoutes from './routes/dashboard';
 import settingsRoutes from './routes/settings';
 import mappingRoutes from './routes/mappings';
+import revenueRoutes from './routes/revenue';
+import aiAssignmentsRoutes from './routes/ai-assignments';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -18,6 +21,7 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(requestLogger);
 
 // Initialize database
 initializeDatabase();
@@ -32,6 +36,8 @@ app.use('/api/cashflow', cashflowRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/mappings', mappingRoutes);
+app.use('/api/revenue', revenueRoutes);
+app.use('/api/ai', aiAssignmentsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -47,11 +53,8 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(clientBuildPath, 'index.html'));
 });
 
-// Error handling
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Internal server error', message: err.message });
-});
+// Global error handler (must be last)
+app.use(errorHandler);
 
 app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`ConstructFlow API running on http://0.0.0.0:${PORT}`);

@@ -64,7 +64,7 @@ export default function Costs() {
 
   const tabs = [
     { id: 'summary', label: 'Summary', icon: DollarSign },
-    { id: 'breakdown', label: 'WBS Breakdown', icon: FileText },
+    { id: 'breakdown', label: 'Cost Breakdown', icon: FileText },
     { id: 'variations', label: 'Variations', icon: TrendingUp },
     { id: 'entries', label: 'Cost Entries', icon: AlertTriangle },
   ];
@@ -201,13 +201,13 @@ export default function Costs() {
         </div>
       )}
 
-      {/* WBS Breakdown Tab */}
+      {/* Cost Breakdown Tab */}
       {activeTab === 'breakdown' && (
         <div className="card overflow-hidden">
           <table className="w-full">
             <thead>
               <tr className="table-header">
-                <th className="px-4 py-3">WBS</th>
+                <th className="px-4 py-3">Cost Item</th>
                 <th className="px-4 py-3 text-right">Budget</th>
                 <th className="px-4 py-3 text-right">Actuals</th>
                 <th className="px-4 py-3 text-right">Variance</th>
