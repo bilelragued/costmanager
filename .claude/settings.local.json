@@ -41,7 +41,8 @@
       "Bash(powershell -Command \"& ''C:\\\\Users\\\\bilel\\\\.fly\\\\bin\\\\flyctl.exe'' status --app constructflow-api\")",
       "Bash(powershell -Command \"& ''C:\\\\Users\\\\bilel\\\\.fly\\\\bin\\\\flyctl.exe'' ssh console --app constructflow-api --command ''sh -c \"\"cd /app && npm run seed\"\"''\")",
       "Bash(echo:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(powershell -Command:*)"
     ]
   }
 }

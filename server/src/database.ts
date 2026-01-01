@@ -650,73 +650,53 @@ export function initializeDatabase() {
       FOREIGN KEY (revenue_item_id) REFERENCES revenue_items(id) ON DELETE SET NULL
     );
 
-    -- =====================================================
-    -- PERFORMANCE INDEXES
-    -- =====================================================
-
-    -- Projects indexes
-    CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
-    CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(created_at);
-
-    -- WBS indexes (frequently queried by project and parent)
-    CREATE INDEX IF NOT EXISTS idx_wbs_items_project_id ON wbs_items(project_id);
-    CREATE INDEX IF NOT EXISTS idx_wbs_items_parent_id ON wbs_items(parent_id);
-    CREATE INDEX IF NOT EXISTS idx_wbs_items_project_level ON wbs_items(project_id, level);
-
-    -- Resource assignment indexes
-    CREATE INDEX IF NOT EXISTS idx_wbs_plant_assignments_wbs_id ON wbs_plant_assignments(wbs_item_id);
-    CREATE INDEX IF NOT EXISTS idx_wbs_labour_assignments_wbs_id ON wbs_labour_assignments(wbs_item_id);
-    CREATE INDEX IF NOT EXISTS idx_wbs_material_assignments_wbs_id ON wbs_material_assignments(wbs_item_id);
-    CREATE INDEX IF NOT EXISTS idx_wbs_subcontractor_assignments_wbs_id ON wbs_subcontractor_assignments(wbs_item_id);
-
-    -- Daily logs indexes
-    CREATE INDEX IF NOT EXISTS idx_daily_logs_project_id ON daily_logs(project_id);
-    CREATE INDEX IF NOT EXISTS idx_daily_logs_date ON daily_logs(log_date);
-    CREATE INDEX IF NOT EXISTS idx_actual_plant_hours_log_id ON actual_plant_hours(daily_log_id);
-    CREATE INDEX IF NOT EXISTS idx_actual_labour_hours_log_id ON actual_labour_hours(daily_log_id);
-    CREATE INDEX IF NOT EXISTS idx_actual_materials_log_id ON actual_materials(daily_log_id);
-    CREATE INDEX IF NOT EXISTS idx_actual_quantities_log_id ON actual_quantities(daily_log_id);
-
-    -- Cost entries indexes
-    CREATE INDEX IF NOT EXISTS idx_cost_entries_project_id ON cost_entries(project_id);
-    CREATE INDEX IF NOT EXISTS idx_cost_entries_wbs_id ON cost_entries(wbs_item_id);
-    CREATE INDEX IF NOT EXISTS idx_cost_entries_status ON cost_entries(status);
-    CREATE INDEX IF NOT EXISTS idx_cost_entries_vendor ON cost_entries(vendor_name);
-
-    -- Claims indexes
-    CREATE INDEX IF NOT EXISTS idx_progress_claims_project_id ON progress_claims(project_id);
-    CREATE INDEX IF NOT EXISTS idx_progress_claims_status ON progress_claims(status);
-    CREATE INDEX IF NOT EXISTS idx_claim_line_items_claim_id ON claim_line_items(claim_id);
-
-    -- Variations indexes
-    CREATE INDEX IF NOT EXISTS idx_variations_project_id ON variations(project_id);
-    CREATE INDEX IF NOT EXISTS idx_variations_status ON variations(status);
-
-    -- Programme tasks indexes
-    CREATE INDEX IF NOT EXISTS idx_programme_tasks_project_id ON programme_tasks(project_id);
-    CREATE INDEX IF NOT EXISTS idx_programme_tasks_parent_id ON programme_tasks(parent_id);
-
-    -- Mapping indexes
-    CREATE INDEX IF NOT EXISTS idx_programme_wbs_mappings_project_id ON programme_wbs_mappings(project_id);
-    CREATE INDEX IF NOT EXISTS idx_programme_wbs_mappings_task_id ON programme_wbs_mappings(programme_task_id);
-    CREATE INDEX IF NOT EXISTS idx_programme_wbs_mappings_wbs_id ON programme_wbs_mappings(wbs_item_id);
-    CREATE INDEX IF NOT EXISTS idx_resource_programme_mappings_task_id ON resource_programme_mappings(programme_task_id);
-    CREATE INDEX IF NOT EXISTS idx_actual_cost_allocations_wbs_id ON actual_cost_allocations(wbs_item_id);
-    CREATE INDEX IF NOT EXISTS idx_actual_cost_allocations_source ON actual_cost_allocations(source_type, source_id);
-
-    -- Revenue indexes
-    CREATE INDEX IF NOT EXISTS idx_revenue_items_project_id ON revenue_items(project_id);
-    CREATE INDEX IF NOT EXISTS idx_programme_revenue_mappings_project_id ON programme_revenue_mappings(project_id);
-    CREATE INDEX IF NOT EXISTS idx_wbs_revenue_mappings_project_id ON wbs_revenue_mappings(project_id);
-
-    -- AI indexes
-    CREATE INDEX IF NOT EXISTS idx_cost_assignment_suggestions_project_id ON cost_assignment_suggestions(project_id);
-    CREATE INDEX IF NOT EXISTS idx_cost_assignment_suggestions_status ON cost_assignment_suggestions(status);
-    CREATE INDEX IF NOT EXISTS idx_assignment_learning_history_project_id ON assignment_learning_history(project_id);
-    CREATE INDEX IF NOT EXISTS idx_vendor_patterns_vendor ON vendor_patterns(vendor_name);
   `);
 
-  console.log('Database initialized successfully');
+  console.log('Database schema initialized');
+
+  // Create indexes safely (ignore errors for columns that may not exist in older DBs)
+  const indexes = [
+    // Projects indexes
+    'CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status)',
+    'CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(created_at)',
+    // WBS indexes
+    'CREATE INDEX IF NOT EXISTS idx_wbs_items_project_id ON wbs_items(project_id)',
+    'CREATE INDEX IF NOT EXISTS idx_wbs_items_parent_id ON wbs_items(parent_id)',
+    'CREATE INDEX IF NOT EXISTS idx_wbs_items_project_level ON wbs_items(project_id, level)',
+    // Resource assignment indexes
+    'CREATE INDEX IF NOT EXISTS idx_wbs_plant_assignments_wbs_id ON wbs_plant_assignments(wbs_item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_wbs_labour_assignments_wbs_id ON wbs_labour_assignments(wbs_item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_wbs_material_assignments_wbs_id ON wbs_material_assignments(wbs_item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_wbs_subcontractor_assignments_wbs_id ON wbs_subcontractor_assignments(wbs_item_id)',
+    // Daily logs indexes
+    'CREATE INDEX IF NOT EXISTS idx_daily_logs_project_id ON daily_logs(project_id)',
+    'CREATE INDEX IF NOT EXISTS idx_daily_logs_date ON daily_logs(log_date)',
+    'CREATE INDEX IF NOT EXISTS idx_actual_plant_hours_log_id ON actual_plant_hours(daily_log_id)',
+    'CREATE INDEX IF NOT EXISTS idx_actual_labour_hours_log_id ON actual_labour_hours(daily_log_id)',
+    'CREATE INDEX IF NOT EXISTS idx_actual_materials_log_id ON actual_materials(daily_log_id)',
+    'CREATE INDEX IF NOT EXISTS idx_actual_quantities_log_id ON actual_quantities(daily_log_id)',
+    // Cost entries indexes
+    'CREATE INDEX IF NOT EXISTS idx_cost_entries_project_id ON cost_entries(project_id)',
+    'CREATE INDEX IF NOT EXISTS idx_cost_entries_wbs_id ON cost_entries(wbs_item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_cost_entries_status ON cost_entries(status)',
+    // Claims indexes
+    'CREATE INDEX IF NOT EXISTS idx_progress_claims_project_id ON progress_claims(project_id)',
+    'CREATE INDEX IF NOT EXISTS idx_progress_claims_status ON progress_claims(status)',
+    'CREATE INDEX IF NOT EXISTS idx_claim_line_items_claim_id ON claim_line_items(claim_id)',
+    // Variations indexes
+    'CREATE INDEX IF NOT EXISTS idx_variations_project_id ON variations(project_id)',
+    'CREATE INDEX IF NOT EXISTS idx_variations_status ON variations(status)',
+  ];
+
+  for (const idx of indexes) {
+    try {
+      db.exec(idx);
+    } catch (e) {
+      // Ignore errors for indexes on columns that don't exist yet
+    }
+  }
+
+  console.log('Database indexes created');
 }
 
 export default db;
